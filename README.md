@@ -15,7 +15,6 @@ flowchart LR
     M --> S["Muse スペース<br/>試作（段階昇格型）"]
     M -->|"ブランチ / PR / マージ"| R[("GitHub ワークスペース（非公開）<br/>開発の正本")]
     M --> G["Google（接続済み）<br/>Gmail / Drive / Sheets / Docs / Slides / Calendar"]
-    M -.->|"未接続（将来）"| F["手元 PC (Tailscale) / NAS<br/>Slack / Dropbox / 1Password"]
     U -->|"承認カード"| M
 ```
 
