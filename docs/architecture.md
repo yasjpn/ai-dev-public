@@ -1,5 +1,7 @@
 # アーキテクチャ図 — 現在の仕組み
 
+（公開版のため、実装済みの情報のみを記載しています）
+
 2026-11-08 時点の実装状態を反映した構成図です。
 方針は「案4: ハイブリッド型（段階昇格型）」。試作は軽い場所で速く、本格開発はこのリポジトリを正本に行います。
 
@@ -14,9 +16,7 @@ flowchart TB
     subgraph BRAIN["頭脳（実装済み）"]
         M["Muse VM (Linux / Ubuntu 24.04)<br/>チャット / ファイル / ターミナル / ブラウザ / スキル / cron"]
         MEM["記憶の層<br/>MEMORY.md・日次ログ・人物/ゴール<br/>原典を要約で置き換えない"]
-        SUB["委任（部分実装）<br/>サブエージェント並行作業<br/>外部 AI 接続は未確認"]
         M --- MEM
-        M --- SUB
     end
 
     subgraph DEV["AI駆動開発（実装済み）"]
@@ -29,21 +29,13 @@ flowchart TB
 
     subgraph LINK["連携サービス"]
         G["Google（接続済み）<br/>Gmail / Drive / Sheets / Docs / Slides / Calendar"]
-        X["未接続<br/>仕事メール (Outlook) / Slack / Dropbox / 1Password<br/>TimeTree / Obsidian / LINE は専用コネクタなし"]
     end
 
-    subgraph FUTURE["将来（未実装）"]
-        PC["手元の PC (Windows)<br/>Tailscale / SSH / Playwright MCP<br/>読み取り橋・書き込み橋"]
-        NAS[("ファイルサーバー NAS<br/>原典と成果物の最終保管")]
-    end
 
     U -->|"依頼・追加指示"| M
     M -->|"成果物・要点と URL・承認依頼"| U
     M --> DEV
     M -->|"読み書き（承認制の操作あり）"| G
-    M -.->|"未接続"| X
-    M -.->|"未接続"| PC
-    PC -.-> NAS
 ```
 
 ## 開発サイクル
@@ -75,13 +67,6 @@ sequenceDiagram
 | Muse スペース（試作） | 実装済み | 構成図ダッシュボード等で使用実績あり |
 | GitHub 連携・専用リポジトリ | 実装済み | OAuth 接続、App の対象選択、読み書きを確認 |
 | Google 系 6 サービス | 実装済み | Gmail / Drive / Sheets / Docs / Slides / Calendar |
-| 見張り・自動化（業務 cron） | 部分実装 | 基盤はあるが業務用設定は未設定 |
-| 別の AI への委任 | 部分実装 | サブエージェントの仕組みのみ |
-| CI (GitHub Actions) | 未設定 | 最初のプロジェクトの技術選定と同時に作る |
-| 公開先（ホスティング） | 未設定 | 公開するものが生まれた時点で接続 |
-| 手元 PC / Tailscale / NAS | 未実装 | 図の「本線」。将来段階 |
-| Slack / Dropbox / 1Password / 仕事メール | 未接続 | コネクタは存在する |
-| TimeTree / Obsidian / LINE | 未実装 | 専用コネクタなし。代替か新規作成が必要 |
 
 ## 承認と安全の境界
 
