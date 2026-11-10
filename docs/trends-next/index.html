@@ -107,6 +107,18 @@
   table.heat td.dim{color:var(--ink2)}
   .cloud{text-align:center;padding:10px 4px;line-height:1.25}
   .cloud span{display:inline-block;margin:3px 5px;cursor:default;font-weight:600}
+  .cloud span.clk{cursor:pointer;border-radius:8px;padding:0 3px}
+  .cloud span.clk:hover{background:var(--chip)}
+  .cloud span.sel{background:var(--chip);box-shadow:0 0 0 2px var(--accent) inset}
+  .wpanel{margin-top:6px;border-top:1px dashed var(--line);padding-top:10px;text-align:left}
+  .wpanel .wh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .wpanel .wh b{font-size:17px}
+  .wpanel .wx{margin-left:auto;border:1px solid var(--line);background:var(--card);color:var(--ink2);
+    border-radius:9px;width:34px;height:34px;font-size:14px;cursor:pointer;flex:0 0 auto}
+  .witem{padding:8px 0;border-top:1px dashed var(--line)}
+  .witem .title{font-weight:600;font-size:14.5px;overflow-wrap:anywhere}
+  .witem .title a{color:inherit;text-decoration:none}
+  .witem .title a:hover{text-decoration:underline}
   footer{margin-top:26px;font-size:12.5px;color:var(--ink2);border-top:1px solid var(--line);padding-top:14px}
   .empty{color:var(--ink2);text-align:center;padding:26px 0}
   .btn{display:inline-block;background:var(--ink);color:var(--bg);text-decoration:none;font-weight:700;
@@ -193,17 +205,47 @@
   }
 
   function CloudBlock(props){
+    var selState = useState(""), sel = selState[0], setSel = selState[1];
     var items = props.items || [];
     if(!items.length) return html`<p class="empty">データなし</p>`;
     var max = items[0].c || 1;
-    return html`<div class="cloud">
-      ${items.map(function(it){
-        var size = 10 + (it.c / max) * 26;
-        var color = PALETTE[stable(it.w) % PALETTE.length];
-        var rot = stable(it.w) % 5 === 0 ? "rotate(-4deg)" : "none";
-        return html`<span key=${it.w} title=${it.c + " 回"}
-          style=${{fontSize: size.toFixed(0) + "px", color: color, transform: rot}}>${it.w}</span>`;
-      })}
+    var wt = props.wt || null, pool = props.pool || [];
+    var selItem = null;
+    items.forEach(function(it){ if(it.w === sel) selItem = it; });
+    var entry = (wt && sel && wt[sel]) ? wt[sel] : null;
+    return html`<div>
+      <div class="cloud">
+        ${items.map(function(it){
+          var size = 10 + (it.c / max) * 26;
+          var color = PALETTE[stable(it.w) % PALETTE.length];
+          var rot = stable(it.w) % 5 === 0 ? "rotate(-4deg)" : "none";
+          var clickable = !!(wt && wt[it.w]);
+          return html`<span key=${it.w} title=${clickable ? "タップで関連トピックを表示" : it.c + " 回"}
+            class=${clickable ? ("clk" + (sel === it.w ? " sel" : "")) : ""}
+            onClick=${clickable ? function(){ setSel(sel === it.w ? "" : it.w); } : null}
+            style=${{fontSize: size.toFixed(0) + "px", color: color, transform: rot}}>${it.w}</span>`;
+        })}
+      </div>
+      ${entry ? html`<div class="wpanel">
+        <div class="wh">
+          <b>${sel}</b>
+          <span class="meta" style="margin-top:0">この期間に ${fmt(selItem ? selItem.c : 0)} 回 ・ 関連トピック ${entry.n} 件${entry.n > entry.items.length ? "（出現順の上位 " + entry.items.length + " 件）" : ""}</span>
+          <button class="wx" aria-label="関連トピックを閉じる" onClick=${function(){ setSel(""); }}>✕</button>
+        </div>
+        ${entry.items.map(function(pair, i){
+          var p = pool[pair[0]];
+          if(!p) return null;
+          return html`<div class="witem" key=${i}>
+            <div class="title">
+              ${p.u ? html`<a href=${p.u} target="_blank" rel="noopener">${p.t}</a>` : p.t}
+              <span class="catchip" style=${{background: CAT_COLORS[p.cat] || "#666"}}>${p.cat}</span>
+            </div>
+            <div class="meta">${p.intl ? "🌐 海外" : "🇯🇵 国内"} ・ この期間 ${fmt(pair[1])} 回 ・ 累計 ${fmt(p.ttl)} 回 ・ ${p.fd}${p.ld && p.ld !== p.fd ? " 〜 " + p.ld : ""}</div>
+            <div class="srcs">${p.src.map(function(s){ return html`<span class="src" key=${s}>${s}</span>`; })}</div>
+          </div>`;
+        })}
+      </div>` : null}
+      ${wt ? html`<p class="meta">単語をタップすると、その単語を含む話題が下に表示されます。</p>` : null}
     </div>`;
   }
 
@@ -335,8 +377,9 @@
         <button class=${mode==="words"?"on":""} onClick=${function(){setMode("words");}}>単語</button>
         <button class=${mode==="kanji"?"on":""} onClick=${function(){setMode("kanji");}}>漢字</button>
       </div>
-      <${CloudBlock} items=${items}/>
-      <p class="meta">フォントサイズは出現頻度に比例（現行サイトと同じ線形スケール）。色は単語ごとの固定色です。</p>
+      <${CloudBlock} items=${items}
+        wt=${mode === "words" ? dd.word_topics : null} pool=${mode === "words" ? dd.wt_pool : null}/>
+      <p class="meta">フォントサイズは出現頻度に比例（現行サイトと同じ線形スケール）。色は単語ごとの固定色です。漢字クラウドは1文字の曖昧さが大きいため、関連トピック表示は単語クラウドのみです。</p>
     </div>`;
   }
 
@@ -474,17 +517,17 @@
       </div>
       <div class="card">
         <h2>3日ワードクラウド</h2>
-        <${CloudBlock} items=${idx.words3d}/>
+        <${CloudBlock} items=${idx.words3d} wt=${idx.word_topics3d} pool=${idx.wt3d_pool}/>
       </div>
       <div class="card">
         <h2>週間ワードクラウド</h2>
         <p class="meta" style="margin-top:0">対象: ${idx.week_range[0]} 〜 ${idx.week_range[1]}（実データ: ${idx.week_days.join(", ")}）</p>
-        <${CloudBlock} items=${idx.words_week}/>
+        <${CloudBlock} items=${idx.words_week} wt=${idx.word_topics_week} pool=${idx.wtw_pool}/>
       </div>
       <div class="card">
         <h2>月間ワードクラウド（${idx.month_label}）</h2>
         <p class="meta" style="margin-top:0">実データ: ${idx.month_days.join(", ")}</p>
-        <${CloudBlock} items=${idx.words_month}/>
+        <${CloudBlock} items=${idx.words_month} wt=${idx.word_topics_month} pool=${idx.wtm_pool}/>
       </div>
     </div>`;
   }
