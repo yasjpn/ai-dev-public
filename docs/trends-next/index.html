@@ -110,6 +110,11 @@
   .cloud span.clk{cursor:pointer;border-radius:8px;padding:0 3px}
   .cloud span.clk:hover{background:var(--chip)}
   .cloud span.sel{background:var(--chip);box-shadow:0 0 0 2px var(--accent) inset}
+  .cloud2{position:relative;margin:0 auto;max-width:100%}
+  .cloud2 span{position:absolute;font-weight:600;line-height:1.1;white-space:nowrap;cursor:default}
+  .cloud2 span.clk{cursor:pointer;border-radius:6px;padding:0 2px}
+  .cloud2 span.clk:hover{background:var(--chip)}
+  .cloud2 span.sel{background:var(--chip);box-shadow:0 0 0 2px var(--accent) inset}
   .wpanel{margin-top:6px;border-top:1px dashed var(--line);padding-top:10px;text-align:left}
   .wpanel .wh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .wpanel .wh b{font-size:17px}
@@ -176,12 +181,13 @@
 <script src="https://unpkg.com/preact@10.26.9/dist/preact.umd.js"></script>
 <script src="https://unpkg.com/preact@10.26.9/hooks/dist/hooks.umd.js"></script>
 <script src="https://unpkg.com/htm@3.1/dist/htm.umd.js"></script>
+<script src="https://unpkg.com/d3-cloud@1.2.7/build/d3.layout.cloud.js"></script>
 <script src="./data.js"></script>
 <script>
 (function(){
   "use strict";
   var h = preact.h, render = preact.render;
-  var useState = preactHooks.useState, useMemo = preactHooks.useMemo, useEffect = preactHooks.useEffect;
+  var useState = preactHooks.useState, useMemo = preactHooks.useMemo, useEffect = preactHooks.useEffect, useRef = preactHooks.useRef;
   var html = htm.bind(h);
   var D = window.TREND_DATA || {days:[], latest:"", calendar:{}, by_day:{}, index:{topics3d:[],cats3d:[],words3d:[],words_week:[],words_month:[],three_days:[],week_days:[],month_days:[],week_range:["",""],month_label:""}};
   var WD = ["日","月","火","水","木","金","土"];
@@ -204,17 +210,70 @@
       <polyline points=${pts} fill="none" stroke="#2563eb" stroke-width="1.5"/></svg>`;
   }
 
+  function cloudRand(seedStr){
+    var s = stable(seedStr) || 1;
+    return function(){ s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  }
+
   function CloudBlock(props){
     var selState = useState(""), sel = selState[0], setSel = selState[1];
+    var layState = useState(null), lay = layState[0], setLay = layState[1];
+    var wState = useState(0), winW = wState[0], setWinW = wState[1];
+    var boxRef = useRef(null);
     var items = props.items || [];
+    var wt = props.wt || null, pool = props.pool || [];
+    var itemsKey = items.map(function(it){ return it.w; }).join("|");
+    useEffect(function(){
+      var t = null;
+      function onR(){ if(t) clearTimeout(t); t = setTimeout(function(){ setWinW(window.innerWidth); }, 250); }
+      window.addEventListener("resize", onR);
+      return function(){ window.removeEventListener("resize", onR); };
+    }, []);
+    useEffect(function(){
+      if(!items.length) return;
+      if(!(window.d3 && d3.layout && d3.layout.cloud)){ setLay({mode:"flow"}); return; }
+      var box = boxRef.current;
+      var W = box && box.clientWidth ? box.clientWidth : Math.min(window.innerWidth - 56, 824);
+      var narrow = W <= 640;
+      var disp = (narrow && items.length > 150) ? items.slice(0, 150) : items;
+      var cmax = items[0].c || 1;
+      var cmin = disp[disp.length - 1].c || 0;
+      var sden = (Math.sqrt(cmax) - Math.sqrt(cmin)) || 1;
+      var minF = narrow ? 8 : 10;
+      var single = disp.every(function(it){ return it.w.length === 1; });
+      var cancelled = false;
+      setLay(null);
+      function attempt(maxF, H, tries){
+        if(cancelled) return;
+        var words = disp.map(function(it){
+          var t = (Math.sqrt(it.c) - Math.sqrt(cmin)) / sden;
+          return { text: it.w, c: it.c,
+            size: Math.round(minF + (maxF - minF) * t),
+            rotate: (!single && stable(it.w) % 9 < 2) ? -90 : 0 };
+        });
+        d3.layout.cloud().size([W, H]).words(words).padding(3)
+          .rotate(function(d){ return d.rotate; })
+          .font('"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif').fontWeight("600")
+          .fontSize(function(d){ return d.size; })
+          .random(cloudRand(itemsKey))
+          .on("end", function(placed){
+            if(cancelled) return;
+            if(placed.length < disp.length * 0.9 && tries < 3){
+              attempt(Math.max(minF + 4, Math.round(maxF * 0.88)), H + 40, tries + 1);
+            } else {
+              setLay({mode:"packed", words: placed, W: W, H: H, total: disp.length});
+            }
+          }).start();
+      }
+      attempt(narrow ? 36 : 52, narrow ? (disp.length > 120 ? 560 : 480) : (disp.length > 200 ? 460 : (disp.length > 120 ? 440 : 400)), 0);
+      return function(){ cancelled = true; };
+    }, [itemsKey, winW]);
     if(!items.length) return html`<p class="empty">データなし</p>`;
     var max = items[0].c || 1;
-    var wt = props.wt || null, pool = props.pool || [];
     var selItem = null;
     items.forEach(function(it){ if(it.w === sel) selItem = it; });
     var entry = (wt && sel && wt[sel]) ? wt[sel] : null;
-    return html`<div>
-      <div class="cloud">
+    var flowBody = html`<div class="cloud">
         ${items.map(function(it){
           var size = 10 + (it.c / max) * 26;
           var color = PALETTE[stable(it.w) % PALETTE.length];
@@ -225,6 +284,24 @@
             onClick=${clickable ? function(){ setSel(sel === it.w ? "" : it.w); } : null}
             style=${{fontSize: size.toFixed(0) + "px", color: color, transform: rot}}>${it.w}</span>`;
         })}
+      </div>`;
+    var packedBody = lay && lay.mode === "packed" ? html`<div>
+      <div class="cloud2" style=${{width: lay.W + "px", height: lay.H + "px"}}>
+        ${lay.words.map(function(d){
+          var clickable = !!(wt && wt[d.text]);
+          return html`<span key=${d.text} title=${clickable ? "タップで関連トピックを表示" : d.c + " 回"}
+            class=${clickable ? ("clk" + (sel === d.text ? " sel" : "")) : ""}
+            onClick=${clickable ? function(){ setSel(sel === d.text ? "" : d.text); } : null}
+            style=${{fontSize: d.size + "px", color: PALETTE[stable(d.text) % PALETTE.length],
+              left: (lay.W / 2 + d.x) + "px", top: (lay.H / 2 + d.y) + "px",
+              transform: "translate(-50%,-50%) rotate(" + d.rotate + "deg)"}}>${d.text}</span>`;
+        })}
+      </div>
+      ${lay.words.length < lay.total ? html`<p class="meta">${lay.total} 語中 ${lay.words.length} 語を表示（入りきらなかった低頻度の語を省略）</p>` : null}
+    </div>` : null;
+    return html`<div>
+      <div ref=${boxRef}>
+        ${lay === null ? html`<p class="empty">配置を計算中…</p>` : (lay.mode === "packed" ? packedBody : flowBody)}
       </div>
       ${entry ? html`<div class="wpanel">
         <div class="wh">
@@ -379,7 +456,7 @@
       </div>
       <${CloudBlock} items=${items}
         wt=${mode === "words" ? dd.word_topics : null} pool=${mode === "words" ? dd.wt_pool : null}/>
-      <p class="meta">フォントサイズは出現頻度に比例（現行サイトと同じ線形スケール）。色は単語ごとの固定色です。漢字クラウドは1文字の曖昧さが大きいため、関連トピック表示は単語クラウドのみです。</p>
+      <p class="meta">単語を詰め込み配置しています（d3-cloud）。フォントサイズは出現頻度の平方根スケール、色は単語ごとの固定色です。漢字クラウドは1文字の曖昧さが大きいため、関連トピック表示は単語クラウドのみです。</p>
     </div>`;
   }
 
