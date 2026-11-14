@@ -19,7 +19,7 @@ flowchart TB
         M --- MEM
     end
 
-    subgraph DEV["AI駆動開発（実装済み）"]
+    subgraph DEV["AI主導開発（実装済み）"]
         SP["試作: Muse スペース / VM ワークスペース<br/>プロトタイプ、ダッシュボード、検証"]
         GH[("正本: GitHub リポジトリ<br/>yasjpn/ai-dev-workspace (private)<br/>ブランチ → PR → 承認 → マージ")]
         PB["運用: docs/playbook.md<br/>昇格基準とチェックリスト<br/>AGENTS.md の作業規約"]
